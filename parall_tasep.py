@@ -68,7 +68,7 @@ class Tasep(object):
 #     n = 10			      #POSIZIONI, QUINDI N/2 PALLINE ecc ecc
 #     T = n
 #     d = 0.5
-#     camp = 5					    #estensione del campione di posizioni     
+#     camp = 5					    #estensione del campione di posizioni
 
 #     P = np.arange(0.0, 1+d, d)        #array contente le 11 probabilita' usate da 0.0 a 1.0
 #     E = np.arange(0.0, 1+d, d)        #array contente le 11 epsilon usate da 0.0 a 1.0
@@ -84,7 +84,7 @@ class Tasep(object):
 #     for y in [0]:
 #         DEN = []
 #         evo = []
-#         for k in range(len(E)):            
+#         for k in range(len(E)):
 #             tasep_inst = Tasep(n, P[y], E[k])
 #             Lt = []   
 
@@ -96,7 +96,7 @@ class Tasep(object):
 #         DEN.append(tasep_inst.density(camp))
 #         evo.append(tasep_inst.evolution(camp))
 
-#     np.save("densita%d" %(n,y), DEN)         
+#     np.save("densita%d" %(n,y), DEN)
 #     np.save('Jn%d_d=0.%d' %(n, d*10), ZETA)
 #     print '\ntempo fine simulazione: \t', datetime.datetime.now(),'\n'
 
