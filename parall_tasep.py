@@ -2,9 +2,16 @@
 
 import numpy as np
 import numpy.random as npr
+import logging
+import logging.config
 #import time
 #import datetime
 #import pdb
+
+logging.config.fileConfig('logging.conf')
+logger = logging.getLogger(__name__)
+
+logger.debug('In module.')
 
 class Tasep(object):
     def __init__(self, particles, size=None, p=.5, epsilon=.05):
@@ -25,6 +32,8 @@ class Tasep(object):
         # The configuration of the tasep is represented by a vector of positions
         # sigma[i] = where is located the ith particle
         self.current = []
+        self.logger = logging.getLogger(__name__ + '.' + self.__class__.__name__)
+        self.logger.debug('Instance created.')
 
     def __repr__(self):
         return 'Parallel TASEP on a ring of size %d (p=%.3f, e=%.3f)' % (self.n, self.p, self.e)
