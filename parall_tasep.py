@@ -15,8 +15,22 @@ PATH_TO_NPY = './npys/'
 logging.config.fileConfig('logging.conf')
 logger = logging.getLogger(__name__)
 
+def coalescence(b, n=None, p=0.5, e=0.05):
+    """
+    Simulate an instance of Coupling until coalescence is reached
+    Return the coalescence time
+    """
+    c = Coupling(b, n, p, e)
+    counter = 0
+    flag = 1
+    while flag:
+        flag = c.update()
+        counter += 1
+    return counter
+
 def query_yes_no(question, default="yes"):
-    """Ask a yes/no question via raw_input() and return their answer.
+    """
+    Ask a yes/no question via raw_input() and return their answer.
 
     "question" is a string that is presented to the user.
     "default" is the presumed answer if the user just hits <Enter>.
@@ -48,10 +62,10 @@ def query_yes_no(question, default="yes"):
                              "(or 'y' or 'n').\n")
 
 class Tasep(object):
+    """
+    Parallel TASEP on a 1D-ring of length 2*particles with update probability and blockage intensity epsilon
+    """
     def __init__(self, particles, size=None, p=.5, epsilon=.05):
-        """
-        Parallel TASEP on a 1D-ring of length 2*particles with update probability and blockage intensity epsilon
-        """
         self.b = particles
         # how many particles in the tasep
         if size is not None:
@@ -61,6 +75,7 @@ class Tasep(object):
             # the size of the ring defaults to twice the number of particles
         self.p = p
         self.e = epsilon
+        self.logger = logging.getLogger(__name__ + '.' + self.__class__.__name__)
         npr.seed()
         self.npy = PATH_TO_NPY + 'N' + str(self.n) \
             + '_B' + str(self.b)\
@@ -70,11 +85,10 @@ class Tasep(object):
         # The configuration of the tasep is represented by a vector of positions
         # sigma[i] = where is located the ith particle
         self.current = []
-        self.logger = logging.getLogger(__name__ + '.' + self.__class__.__name__)
         self.logger.debug('Instance created.')
 
     def __repr__(self):
-        return 'Parallel TASEP on a ring of size %d (p=%.3f, e=%.3f)' % (self.n, self.p, self.e)
+        return 'Parallel TASEP :: %d particles, ring length %d, p=%.3f, e=%.3f' % (self.b, self.n, self.p, self.e)
 
     @property
     def sigma(self):
@@ -85,13 +99,23 @@ class Tasep(object):
         self._sigma = value
 
     def dumper(self):
-        np.save(self.npy, self.sigma)
+        self.logger.info('Trying to save current configuration to .npy file...')
+        try:
+            np.save(self.npy, self.sigma)
+        except IOError as e:
+            self.logger.error('Failed to save .npy file. I/O error({0}): {1}'.format(e.errno, e.strerror))
+        else:
+            self.logger.info('Configuration saved successfully.')
+
 
     def loader(self):
-    	try:
-    		loaded = np.load(self.npy)
-    	except IOError as e:
-    		self.logger.error("Failed to load .npy file. I/O error({0}): {1}".format(e.errno, e.strerror))
+        self.logger.info('Trying to load current configuration to .npy file...')
+        try:
+            loaded = np.load(self.npy)
+        except IOError as e:
+            self.logger.error('Failed to load .npy file. I/O error({0}): {1}'.format(e.errno, e.strerror))
+        else:
+            self.logger.info('Configuration loaded successfully.')
         return loaded
     
     @property
@@ -109,7 +133,7 @@ class Tasep(object):
 
     def initSigma(self):
         """
-        Initialize sigma either to a previously-dumped or to a new configuration
+        Return an initial configuration sigma (either a previously-dumped or a new random configuration)
         """
         answer = False
         if os.path.isfile(self.npy):
@@ -119,12 +143,15 @@ class Tasep(object):
             print '- created on', created
             print '- last modified', last_modified
             print ''
+            self.logger.debug('Previously saved configuration exists. Waiting for user...')
             answer = query_yes_no('Do you want to load it?')
         if answer:
+            self.logger.debug('Positive answer.')
             return self.loader()
         else:
             # sigma is initialized to a sorted vector of random numbers in [0, n-1]
             # each entry of the vector is the spatial position of a particle on the ring
+            self.logger.debug('Negative answer.')
             return np.sort(npr.choice(self.n, size=self.b, replace=False), kind='mergesort')
 
     def update(self):
@@ -149,6 +176,8 @@ class Tasep(object):
         # the last particle may go to site n, so we apply the periodic boundary conditions
         if not self.sigma[-1]:
             self.sigma = np.roll(self.sigma, 1)
+            # if the last particle has completed one loop (i.e. it is in position 0)
+            # then we apply the periodic boundary condition by rolling the configuration
 
     def density(self, graining):
         """
@@ -159,3 +188,75 @@ class Tasep(object):
         # the ring is split into subarrays according to graining,
         # then np.mean is applied to each subarray
         return map(np.mean, sections)
+
+class Coupling(object):
+    """
+    Parallel TASEP on a 1D-ring of length 2*particles with update probability and blockage intensity epsilon
+    """
+    def __init__(self, particles, size=None, p=.5, epsilon=.05):
+        self.b = particles
+        # how many particles in the tasep
+        if size is not None:
+            self.n = size
+        else:
+            self.n = 2*self.b
+            # the size of the ring defaults to twice the number of particles
+        self.p = p
+        self.e = epsilon
+        npr.seed()
+        ################################################################
+        # considerare di rendere inizializzazione sigma/tau piu' dinamica
+        self._sigma = np.arange(self.b) + self.n - self.b
+        self._tau = np.arange(self.b)
+        ################################################################
+
+    def __repr__(self):
+        return 'Coupling of two parallel TASEPs :: %d particles, ring length %d, p=%.3f, e=%.3f' % (self.b, self.n, self.p, self.e)
+
+    @property
+    def sigma(self):
+        return self._sigma
+    @sigma.setter
+    def sigma(self, value):
+        self._sigma = value
+
+    @property
+    def tau(self):
+        return self._tau
+    @tau.setter
+    def tau(self, value):
+        self._tau = value
+    
+    def update(self):
+        """
+        Jointly update the coupled configurations sigma and tau
+        Free particles occupying the same site in both configurations take the same update
+        The remaining free particles are updated indipendently
+        """
+        s_freetomove = np.nonzero( np.roll(self.sigma, -1) - (self.sigma + 1)%self.n )[0]
+        t_freetomove = np.nonzero( np.roll(self.tau, -1) - (self.tau + 1)%self.n )[0]
+        # find particles that are free to move in sigma or tau, respectively
+        bothfree = np.intersect1d(s_freetomove, t_freetomove)
+        # find particles that are simultaneously free to move in both sigma and tau
+        s_free_only = np.setdiff1d(s_freetomove, bothfree)
+        t_free_only = np.setdiff1d(t_freetomove, bothfree)
+        # find particles that are free to move in sigma only or in tau only, respectively 
+        updates = npr.choice(np.arange(2), size=len(bothfree), replace=True, p=np.array([1.-self.p, self.p]))
+        # select for updates particles free to move both in sigma and tau
+        self.sigma[bothfree] += updates
+        self.tau[bothfree] += updates
+        # update sigma and tau
+        self.sigma[s_free_only] += npr.choice(np.arange(2), size=len(s_free_only), replace=True, p=np.array([1.-self.p, self.p]))
+        self.tau[t_free_only] += npr.choice(np.arange(2), size=len(t_free_only), replace=True, p=np.array([1.-self.p, self.p]))
+        # select and update particles free to move in sigma only or in tau only, respectively
+        self.sigma[-1] = self.sigma[-1] % self.n
+        self.tau[-1] = self.tau[-1] % self.n
+        # apply periodic boundary conditions to the last particle
+        if not self.sigma[-1]:
+            self.sigma = np.roll(self.sigma, 1)
+        if not self.tau[-1]:
+            self.tau = np.roll(self.tau, 1)
+        # if the last particle has completed one loop (i.e. it is in position 0)
+        # then we apply the periodic boundary condition by rolling the configuration
+        return np.sum(np.absolute(self.sigma - self.tau))
+        # if the function returns 0 then coalescence was reached
