@@ -7,7 +7,6 @@ import logging.config
 import sys
 import os.path
 import time
-#import datetime
 #import pdb
 
 PATH_TO_NPY = './npys/'
@@ -165,12 +164,13 @@ class Tasep(object):
         # Append the latest value of the current
         updates = npr.choice(np.arange(2), size=len(freetomove), replace=True, p=np.array([1.-self.p, self.p]))
         # We choose which particles to move one step ahead among those free-to-move independently with probability p
-        if self.sigma[freetomove[-1]] == self.n-1 and updates[-1] == 1:
+        if self.sigma[freetomove[-1]] == self.n-1 and updates[-1] == 1: 
+        # THIS WILL RAISE AN ERROR IF self.n == self.b BUT THIS IS SOMETHING VERY STUPID
             # if there's a particle at site n-1 about to move, then we move it with probability 1-epsilon
             # all in all, that particle is moved with probability p*(1-epsilon) (blockage)
             blockupdate = 0 if npr.random() < self.e else 1
             updates[-1] = blockupdate
-        self.sigma[freetomove] += updates
+        self.sigma[freN10_B5_p0.5_e0.05.npyetomove] += updates
         # the particles selected to be moved go to the next position
         self.sigma[-1] = self.sigma[-1] % self.n
         # the last particle may go to site n, so we apply the periodic boundary conditions
@@ -235,20 +235,57 @@ class Coupling(object):
         """
         s_freetomove = np.nonzero( np.roll(self.sigma, -1) - (self.sigma + 1)%self.n )[0]
         t_freetomove = np.nonzero( np.roll(self.tau, -1) - (self.tau + 1)%self.n )[0]
-        # find particles that are free to move in sigma or tau, respectively
-        bothfree = np.intersect1d(s_freetomove, t_freetomove)
-        # find particles that are simultaneously free to move in both sigma and tau
-        s_free_only = np.setdiff1d(s_freetomove, bothfree)
-        t_free_only = np.setdiff1d(t_freetomove, bothfree)
-        # find particles that are free to move in sigma only or in tau only, respectively 
-        updates = npr.choice(np.arange(2), size=len(bothfree), replace=True, p=np.array([1.-self.p, self.p]))
+        # find sites occupied by particles that are free to move in sigma or tau, respectively
+        bothfree = np.intersect1d(self.sigma[s_freetomove], self.tau[t_freetomove], assume_unique=True)
+        s_bothfree = np.nonzero(np.in1d(self.sigma, bothfree, assume_unique=True))[0]
+        t_bothfree = np.nonzero(np.in1d(self.tau, bothfree, assume_unique=True))[0]
+        # find sites that are occupied by particles that are simultaneously free to move in both sigma and tau
+        s_free_only = np.setdiff1d(s_freetomove, s_bothfree)
+        t_free_only = np.setdiff1d(t_freetomove, t_bothfree)
+        # find sites ocupied by particles that are free to move in sigma only or in tau only, respectively 
+        b_updates = npr.choice(np.arange(2), size=len(bothfree), replace=True, p=np.array([1.-self.p, self.p]))
         # select for updates particles free to move both in sigma and tau
-        self.sigma[bothfree] += updates
-        self.tau[bothfree] += updates
+        s_updates = npr.choice(np.arange(2), size=len(s_free_only), replace=True, p=np.array([1.-self.p, self.p]))
+        t_updates = npr.choice(np.arange(2), size=len(t_free_only), replace=True, p=np.array([1.-self.p, self.p]))
+        # select for updates particles free to move in sigma only or in tau only, respectively
+        try:
+            common_particle_before_blockage = (bothfree[-1] == self.n-1 and b_updates[-1] == 1)
+        except IndexError:
+            common_particle_before_blockage = False
+        
+        try:
+            sigma_particle_before_blockage = (self.sigma[s_freetomove[-1]] == self.n-1 and s_updates[-1] == 1)
+        except IndexError:
+            sigma_particle_before_blockage = False
+        
+        try:
+            tau_particle_before_blockage = (self.tau[t_freetomove[-1]] == self.n-1 and t_updates[-1] == 1)
+        except IndexError:
+            tau_particle_before_blockage = False
+
+        if common_particle_before_blockage:
+            # if there's a particle at site n-1 about to move, then we move it with probability 1-epsilon
+            # all in all, that particle is moved with probability p*(1-epsilon) (blockage)
+            blockupdate = 0 if npr.random() < self.e else 1
+            b_updates[-1] = blockupdate
+
+        if sigma_particle_before_blockage:
+            # if there's a particle at site n-1 about to move, then we move it with probability 1-epsilon
+            # all in all, that particle is moved with probability p*(1-epsilon) (blockage)
+            blockupdate = 0 if npr.random() < self.e else 1
+            s_updates[-1] = blockupdate
+
+        if tau_particle_before_blockage:
+            # if there's a particle at site n-1 about to move, then we move it with probability 1-epsilon
+            # all in all, that particle is moved with probability p*(1-epsilon) (blockage)
+            blockupdate = 0 if npr.random() < self.e else 1
+            t_updates[-1] = blockupdate
+        
+        self.sigma[s_bothfree] += b_updates
+        self.tau[t_bothfree] += b_updates
+        self.sigma[s_free_only] += s_updates
+        self.tau[t_free_only] += t_updates
         # update sigma and tau
-        self.sigma[s_free_only] += npr.choice(np.arange(2), size=len(s_free_only), replace=True, p=np.array([1.-self.p, self.p]))
-        self.tau[t_free_only] += npr.choice(np.arange(2), size=len(t_free_only), replace=True, p=np.array([1.-self.p, self.p]))
-        # select and update particles free to move in sigma only or in tau only, respectively
         self.sigma[-1] = self.sigma[-1] % self.n
         self.tau[-1] = self.tau[-1] % self.n
         # apply periodic boundary conditions to the last particle
