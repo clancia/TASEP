@@ -170,7 +170,7 @@ class Tasep(object):
             # all in all, that particle is moved with probability p*(1-epsilon) (blockage)
             blockupdate = 0 if npr.random() < self.e else 1
             updates[-1] = blockupdate
-        self.sigma[freN10_B5_p0.5_e0.05.npyetomove] += updates
+        self.sigma[freetomove] += updates
         # the particles selected to be moved go to the next position
         self.sigma[-1] = self.sigma[-1] % self.n
         # the last particle may go to site n, so we apply the periodic boundary conditions
@@ -249,33 +249,35 @@ class Coupling(object):
         t_updates = npr.choice(np.arange(2), size=len(t_free_only), replace=True, p=np.array([1.-self.p, self.p]))
         # select for updates particles free to move in sigma only or in tau only, respectively
         try:
-            common_particle_before_blockage = (bothfree[-1] == self.n-1 and b_updates[-1] == 1)
+            common_particle_before_blockage = bothfree[-1] == self.n-1
         except IndexError:
             common_particle_before_blockage = False
         
         try:
-            sigma_particle_before_blockage = (self.sigma[s_freetomove[-1]] == self.n-1 and s_updates[-1] == 1)
+            sigma_particle_before_blockage = (not common_particle_before_blockage 
+                and self.sigma[s_freetomove[-1]] == self.n-1)
         except IndexError:
             sigma_particle_before_blockage = False
         
         try:
-            tau_particle_before_blockage = (self.tau[t_freetomove[-1]] == self.n-1 and t_updates[-1] == 1)
+            tau_particle_before_blockage = (not common_particle_before_blockage 
+                and self.tau[t_freetomove[-1]] == self.n-1) 
         except IndexError:
             tau_particle_before_blockage = False
 
-        if common_particle_before_blockage:
+        if common_particle_before_blockage and b_updates[-1]:
             # if there's a particle at site n-1 about to move, then we move it with probability 1-epsilon
             # all in all, that particle is moved with probability p*(1-epsilon) (blockage)
             blockupdate = 0 if npr.random() < self.e else 1
             b_updates[-1] = blockupdate
 
-        if sigma_particle_before_blockage:
+        if sigma_particle_before_blockage and s_updates[-1]:
             # if there's a particle at site n-1 about to move, then we move it with probability 1-epsilon
             # all in all, that particle is moved with probability p*(1-epsilon) (blockage)
             blockupdate = 0 if npr.random() < self.e else 1
             s_updates[-1] = blockupdate
 
-        if tau_particle_before_blockage:
+        if tau_particle_before_blockage and t_updates[-1]:
             # if there's a particle at site n-1 about to move, then we move it with probability 1-epsilon
             # all in all, that particle is moved with probability p*(1-epsilon) (blockage)
             blockupdate = 0 if npr.random() < self.e else 1
