@@ -14,17 +14,24 @@ PATH_TO_NPY = './npys/'
 logging.config.fileConfig('logging.conf')
 logger = logging.getLogger(__name__)
 
-def coalescence(b, n=None, p=0.5, e=0.05):
+def coalescence(b, n=None, p=0.5, e=0.05, kind='site'):
     """
     Simulate an instance of Coupling until coalescence is reached
     Return the coalescence time
     """
-    c = Coupling(b, n, p, e)
+    if kind == 'site':
+        c = CouplingSameSite(b, n, p, e)
+    elif kind == 'ry':
+        c = RedYellowCoupling(b, n, p, e)
+    else:
+        logger.error("Invalid parameter 'kind' in coalescence.")
+        sys.exit(1)
     counter = 0
     flag = 1
     while flag:
         flag = c.update()
         counter += 1
+    logger.debug('Coalescence achieved in %d steps.' % (counter))
     return counter
 
 def query_yes_no(question, default="yes"):
@@ -84,7 +91,7 @@ class Tasep(object):
         # The configuration of the tasep is represented by a vector of positions
         # sigma[i] = where is located the ith particle
         self.current = []
-        self.logger.debug('Instance created.')
+        self.logger.debug('Created istance of %s' % (self))
 
     def __repr__(self):
         return 'Parallel TASEP :: %d particles, ring length %d, p=%.3f, e=%.3f' % (self.b, self.n, self.p, self.e)
@@ -189,7 +196,7 @@ class Tasep(object):
         # then np.mean is applied to each subarray
         return map(np.mean, sections)
 
-class Coupling(object):
+class BaseCoupling(object):
     """
     Parallel TASEP on a 1D-ring of length 2*particles with update probability and blockage intensity epsilon
     """
@@ -203,15 +210,13 @@ class Coupling(object):
             # the size of the ring defaults to twice the number of particles
         self.p = p
         self.e = epsilon
+        self.logger = logging.getLogger(__name__ + '.' + self.__class__.__name__)
         npr.seed()
-        ################################################################
-        # considerare di rendere inizializzazione sigma/tau piu' dinamica
-        self._sigma = np.arange(self.b) + self.n - self.b
-        self._tau = np.arange(self.b)
-        ################################################################
+        self.initSigmaTau()
+        self.logger.debug('Created istance of %s.' % (self))
 
-    def __repr__(self):
-        return 'Coupling of two parallel TASEPs :: %d particles, ring length %d, p=%.3f, e=%.3f' % (self.b, self.n, self.p, self.e)
+    def initSigmaTau(self):
+        pass
 
     @property
     def sigma(self):
@@ -226,7 +231,18 @@ class Coupling(object):
     @tau.setter
     def tau(self, value):
         self._tau = value
-    
+
+class CouplingSameSite(BaseCoupling):
+    """
+    Lorem ipsum Dolor Amet
+    """
+    def __repr__(self):
+        return 'Coupling (Same Site Same Update) :: %d particles, ring length %d, p=%.3f, e=%.3f' % (self.b, self.n, self.p, self.e)
+
+    def initSigmaTau(self):
+        self._sigma = np.arange(self.b) + self.n - self.b
+        self._tau = np.arange(self.b)
+
     def update(self):
         """
         Jointly update the coupled configurations sigma and tau
@@ -297,5 +313,95 @@ class Coupling(object):
             self.tau = np.roll(self.tau, 1)
         # if the last particle has completed one loop (i.e. it is in position 0)
         # then we apply the periodic boundary condition by rolling the configuration
+        return np.sum(np.absolute(self.sigma - self.tau))
+        # if the function returns 0 then coalescence was reached
+
+class RedYellowCoupling(BaseCoupling):
+    """
+    Particella mezza gialla e mezza rossa
+    """
+    def __repr__(self):
+        return 'Coupling (Same Particle Same Update) :: %d particles, ring length %d, p=%.3f, e=%.3f' % (self.b, self.n, self.p, self.e)
+
+    def initSigmaTau(self):
+        v = np.sort(npr.choice(np.arange(1,self.n-1), size=self.b-1, replace=False), kind='mergesort')
+        self._sigma = np.empty(self.b)
+        self._tau = np.empty(self.b)
+        self.sigma[0] = 0
+        self._sigma[1:] = v
+        self.tau[0] = self.n-1
+        self.tau[1:] = v
+        self.maxsigma = self.b-1
+        self.maxtau = 0
+
+    def update(self):
+        """
+        Jointly update the coupled configurations sigma and tau
+        Free particles occupying the same site in both configurations take the same update
+        The remaining free particles are updated indipendently
+        """
+        s_freetomove = np.nonzero( np.roll(self.sigma, -1) - (self.sigma + 1)%self.n )[0]
+        t_freetomove = np.nonzero( np.roll(self.tau, -1) - (self.tau + 1)%self.n )[0]
+        # find sites occupied by particles that are free to move in sigma or tau, respectively
+        bothfree = np.intersect1d(s_freetomove, t_freetomove, assume_unique=True)
+        # find sites that are occupied by particles that are simultaneously free to move in both sigma and tau
+        s_free_only = np.setdiff1d(s_freetomove, bothfree)
+        t_free_only = np.setdiff1d(t_freetomove, bothfree)
+        # find sites ocupied by particles that are free to move in sigma only or in tau only, respectively 
+
+        try:
+            common_particle_before_blockage = self.sigma[self.maxsigma] == self.n-1 and self.sigma[self.maxsigma] == self.tau[self.maxtau]
+        except IndexError:
+            common_particle_before_blockage = False
+        
+        try:
+            sigma_particle_before_blockage = not common_particle_before_blockage and self.sigma[self.maxsigma] == self.n-1
+        except IndexError:
+            sigma_particle_before_blockage = False
+        
+        try:
+            tau_particle_before_blockage = not common_particle_before_blockage and self.tau[self.maxtau] == self.n-1
+        except IndexError:
+            tau_particle_before_blockage = False
+
+        sigma_updater = np.zeros(self.b)
+        tau_updater = np.zeros(self.b)
+        b_updates = npr.choice(np.arange(2), size=len(bothfree), replace=True, p=np.array([1.-self.p, self.p]))
+        sigma_updater[bothfree] = b_updates
+        tau_updater[bothfree] = b_updates
+        # select for updates particles free to move both in sigma and tau
+        sigma_updater[s_free_only] = npr.choice(np.arange(2), size=len(s_free_only), replace=True, p=np.array([1.-self.p, self.p]))
+        tau_updater[t_free_only] = npr.choice(np.arange(2), size=len(t_free_only), replace=True, p=np.array([1.-self.p, self.p]))
+        # select for updates particles free to move in sigma only or in tau only, respectively
+
+        if common_particle_before_blockage and sigma_updater[self.maxsigma]:
+            # if there's a particle at site n-1 about to move, then we move it with probability 1-epsilon
+            # all in all, that particle is moved with probability p*(1-epsilon) (blockage)
+            blockupdate = 0 if npr.random() < self.e else 1
+            sigma_updater[self.maxsigma] = blockupdate
+            tau_updater[self.maxtau] = blockupdate
+
+        if sigma_particle_before_blockage and sigma_updater[self.maxsigma]:
+            # if there's a particle at site n-1 about to move, then we move it with probability 1-epsilon
+            # all in all, that particle is moved with probability p*(1-epsilon) (blockage)
+            blockupdate = 0 if npr.random() < self.e else 1
+            sigma_updater[self.maxsigma] = blockupdate
+
+        if tau_particle_before_blockage and tau_updater[self.maxtau]:
+            # if there's a particle at site n-1 about to move, then we move it with probability 1-epsilon
+            # all in all, that particle is moved with probability p*(1-epsilon) (blockage)
+            blockupdate = 0 if npr.random() < self.e else 1
+            tau_updater[self.maxtau] = blockupdate
+
+        if sigma_updater[self.maxsigma]:
+            self.maxsigma = (self.maxsigma+1)%self.b
+        if tau_updater[self.maxtau]:
+            self.maxtau = (self.maxtau+1)%self.b
+        self.sigma += sigma_updater
+        self.tau += tau_updater
+        # update sigma and tau
+        self.sigma = self.sigma % self.n
+        self.tau = self.tau % self.n
+        # apply periodic boundary conditions to the last particle
         return np.sum(np.absolute(self.sigma - self.tau))
         # if the function returns 0 then coalescence was reached
