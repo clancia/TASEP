@@ -239,9 +239,18 @@ class CouplingSameSite(BaseCoupling):
     def __repr__(self):
         return 'Coupling (Same Site Same Update) :: %d particles, ring length %d, p=%.3f, e=%.3f' % (self.b, self.n, self.p, self.e)
 
+    # def initSigmaTau(self):
+    #     self._sigma = np.arange(self.b) + self.n - self.b
+    #     self._tau = np.arange(self.b)
+
     def initSigmaTau(self):
-        self._sigma = np.arange(self.b) + self.n - self.b
-        self._tau = np.arange(self.b)
+        v = np.sort(npr.choice(np.arange(1,self.n-1), size=self.b-1, replace=False), kind='mergesort')
+        self._sigma = np.empty(self.b)
+        self._tau = np.empty(self.b)
+        self.sigma[0] = 0
+        self._sigma[1:] = v
+        self.tau[0] = self.n-1
+        self.tau[1:] = v
 
     def update(self):
         """
