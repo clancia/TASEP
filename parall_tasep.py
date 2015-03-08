@@ -249,8 +249,8 @@ class CouplingSameSite(BaseCoupling):
         self._tau = np.empty(self.b)
         self.sigma[0] = 0
         self._sigma[1:] = v
-        self.tau[0] = self.n-1
-        self.tau[1:] = v
+        self.tau[-1] = self.n-1
+        self.tau[:-1] = v
 
     def update(self):
         """
