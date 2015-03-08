@@ -71,7 +71,7 @@ class Tasep(object):
     """
     Parallel TASEP on a 1D-ring of length 2*particles with update probability and blockage intensity epsilon
     """
-    def __init__(self, particles, size=None, p=.5, epsilon=.05):
+    def __init__(self, particles, size=None, p=.5, epsilon=.05, loadcheck=True):
         self.b = particles
         # how many particles in the tasep
         if size is not None:
@@ -87,7 +87,10 @@ class Tasep(object):
             + '_B' + str(self.b)\
             + '_p' + str(self.p)\
             + '_e' + str(self.e) + '.npy'
-        self._sigma = self.initSigma()
+        if loadcheck:
+            self._sigma = self.initSigma()
+        else:
+            self._sigma = self.randomconfig()
         # The configuration of the tasep is represented by a vector of positions
         # sigma[i] = where is located the ith particle
         self.current = []
@@ -158,7 +161,10 @@ class Tasep(object):
             # sigma is initialized to a sorted vector of random numbers in [0, n-1]
             # each entry of the vector is the spatial position of a particle on the ring
             self.logger.debug('Negative answer.')
-            return np.sort(npr.choice(self.n, size=self.b, replace=False), kind='mergesort')
+            return self.randomconfig
+
+    def randomconfig(self):
+        return np.sort(npr.choice(self.n, size=self.b, replace=False), kind='mergesort')
 
     def update(self):
         """
