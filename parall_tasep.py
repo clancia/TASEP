@@ -10,6 +10,7 @@ import time
 #import pdb
 
 PATH_TO_NPY = './npys/'
+BUFFERSIZE = 500
 
 logging.config.fileConfig('logging.conf')
 logger = logging.getLogger(__name__)
@@ -93,7 +94,9 @@ class Tasep(object):
             self._sigma = self.randomconfig()
         # The configuration of the tasep is represented by a vector of positions
         # sigma[i] = where is located the ith particle
-        self.current = []
+        self.current = np.zeros(BUFFERSIZE, dtype=np.float64)
+        if self.e:
+            self._trafficlight = 'k'
         self.logger.debug('Created istance of %s' % (self))
 
     def __repr__(self):
@@ -102,31 +105,17 @@ class Tasep(object):
     @property
     def sigma(self):
         return self._sigma
-
     @sigma.setter
     def sigma(self, value):
         self._sigma = value
 
-    def dumper(self):
-        self.logger.info('Trying to save current configuration to .npy file...')
-        try:
-            np.save(self.npy, self.sigma)
-        except IOError as e:
-            self.logger.error('Failed to save .npy file. I/O error({0}): {1}'.format(e.errno, e.strerror))
-        else:
-            self.logger.info('Configuration saved successfully.')
+    @property
+    def trafficlight(self):
+        return self._trafficlight
+    @trafficlight.setter
+    def trafficlight(self, value):
+        self._trafficlight = value
 
-
-    def loader(self):
-        self.logger.info('Trying to load current configuration to .npy file...')
-        try:
-            loaded = np.load(self.npy)
-        except IOError as e:
-            self.logger.error('Failed to load .npy file. I/O error({0}): {1}'.format(e.errno, e.strerror))
-        else:
-            self.logger.info('Configuration loaded successfully.')
-        return loaded
-    
     @property
     def fullsigma(self):
         """
@@ -166,6 +155,26 @@ class Tasep(object):
     def randomconfig(self):
         return np.sort(npr.choice(self.n, size=self.b, replace=False), kind='mergesort')
 
+    def dumper(self):
+        self.logger.info('Trying to save current configuration to .npy file...')
+        try:
+            np.save(self.npy, self.sigma)
+        except IOError as e:
+            self.logger.error('Failed to save .npy file. I/O error({0}): {1}'.format(e.errno, e.strerror))
+        else:
+            self.logger.info('Configuration saved successfully.')
+
+
+    def loader(self):
+        self.logger.info('Trying to load current configuration to .npy file...')
+        try:
+            loaded = np.load(self.npy)
+        except IOError as e:
+            self.logger.error('Failed to load .npy file. I/O error({0}): {1}'.format(e.errno, e.strerror))
+        else:
+            self.logger.info('Configuration loaded successfully.')
+        return loaded
+
     def update(self):
         """
         Update the configuration sigma applying one step of the TASEP dynamics
@@ -173,7 +182,8 @@ class Tasep(object):
         freetomove = np.nonzero( np.roll(self.sigma, -1) - (self.sigma + 1)%self.n )[0]
         # Particle at site i is not free to move if there is another particle at site i+1 (mod n),
         # i.e. if sigma[i+1] == sigma[i]+1
-        self.current.append(len(freetomove)/float(self.n)) 
+        self.current = np.roll(self.current, -1)
+        self.current[0] = len(freetomove)/float(self.n)
         # Append the latest value of the current
         updates = npr.choice(np.arange(2), size=len(freetomove), replace=True, p=np.array([1.-self.p, self.p]))
         # We choose which particles to move one step ahead among those free-to-move independently with probability p
@@ -181,7 +191,7 @@ class Tasep(object):
         # THIS WILL RAISE AN ERROR IF self.n == self.b BUT THIS IS SOMETHING VERY STUPID
             # if there's a particle at site n-1 about to move, then we move it with probability 1-epsilon
             # all in all, that particle is moved with probability p*(1-epsilon) (blockage)
-            blockupdate = 0 if npr.random() < self.e else 1
+            blockupdate = 0 if self.trafficlight == 'r' else 1
             updates[-1] = blockupdate
         self.sigma[freetomove] += updates
         # the particles selected to be moved go to the next position
@@ -191,6 +201,7 @@ class Tasep(object):
             self.sigma = np.roll(self.sigma, 1)
             # if the last particle has completed one loop (i.e. it is in position 0)
             # then we apply the periodic boundary condition by rolling the configuration
+        self.trafficlight = 'r' if npr.random() < self.e else 'g'
 
     def density(self, graining):
         """
