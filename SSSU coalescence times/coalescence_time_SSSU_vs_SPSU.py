@@ -9,7 +9,6 @@ from glob import glob
 # nomefile = './N' + str(N) + '_B' + str(B) + '_p' + str(p) + '_e*.npy'
 # nomefile = glob(nomefile) 
 
-data = []
 # epsilon = []
 
 # nomefile.sort(key=lambda x: x.split('_')[-1][1:-4])
@@ -18,16 +17,21 @@ data = []
 #     epsilon.append(float(f.split('_')[-1][1:-4]))
 
 
-data.append(np.load('N20_B10_p0.5_e0.10.npy'))
-data.append(np.load('./SPSU/ryN20_B10_p0.5_e0.1.npy'))
+data0=np.load('SSN20_B10_p0.5_e0.1.npy')
+data1=np.load('SPN20_B10_p0.5_e0.1.npy')
 
-fig, ax = plt.subplots()
+fig, (ax0,ax1) = plt.subplots(ncols=2)
+fig.suptitle('Parallel TASEP with blockage Same Site vs Same Particle Coalescence Times', fontsize=18)
 
-plt.boxplot(data)
 
-ax.set_ylabel('Coalescence Times')
-ax.set_xlabel('SSSU vs SPSU')
-#plt.title('Parallel TASEP with blockage ({particles} particles and update probability {prob})'.format(particles=B, prob=p))
+#plt.boxplot(data)
+ax0.set_ylabel('Coalescence Times', fontsize=15)
+ax0.set_xlabel('Same Site Same Update', fontsize=15)
+ax1.set_xlabel('Same Particle Same Update', fontsize=15)
+
+ax0.boxplot(data0)
+ax1.boxplot(data1)
+
 #plt.grid(True)
 #plt.savefig('%s.png' %(nomefile))
 #xtickNames = plt.setp(ax, xticklabels=epsilon)
