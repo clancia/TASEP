@@ -161,16 +161,18 @@ class Tasep(object):
             np.save(self.npy, self.sigma)
         except IOError as e:
             self.logger.error('Failed to save .npy file. I/O error({0}): {1}'.format(e.errno, e.strerror))
+            raise e
         else:
             self.logger.info('Configuration saved successfully.')
 
 
     def loader(self):
-        self.logger.info('Trying to load current configuration to .npy file...')
+        self.logger.info('Trying to load current configuration from .npy file...')
         try:
             loaded = np.load(self.npy)
         except IOError as e:
             self.logger.error('Failed to load .npy file. I/O error({0}): {1}'.format(e.errno, e.strerror))
+            raise e
         else:
             self.logger.info('Configuration loaded successfully.')
         return loaded
@@ -248,6 +250,13 @@ class BaseCoupling(object):
     @tau.setter
     def tau(self, value):
         self._tau = value
+
+    def __enter__(self):
+        self.logger.debug('In __enter__()')
+        return self
+
+    def __exit__(self, type, value, traceback):
+        self.logger.debug('In __exit__(), type={0}, value={1}, traceback={2}'.format(type, value, traceback))
 
 class CouplingSameSite(BaseCoupling):
     """

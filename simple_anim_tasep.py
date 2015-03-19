@@ -78,6 +78,6 @@ def animate(i):
     tsp.update()
     return patches, trafficlight
 
-anim = animation.FuncAnimation(fig, animate, init_func=init, interval=100)
+anim = animation.FuncAnimation(fig, animate, init_func=init, interval=250)
 #anim.save('live_tasep.mp4', fps=5)#, extra_args=['-vcodec', 'libx264'])
 plt.show()
