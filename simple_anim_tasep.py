@@ -57,8 +57,8 @@ def init():
     # initialize an empty list of cirlces
     ax1.add_patch( plt.Circle((0,0), radius=PLOT_RADIUS, fc='none', ec='k', ls='dotted') )
     ax1.set_title('Parallel TASEP on a ring of size {0}'.format(n))
+    trafficlight = ax1.add_patch( plt.Rectangle((-rx/2, PLOT_RADIUS - ry/2), rx, ry, fc='none', ec='none', alpha=0.75 ) )
     if e > 0:
-        trafficlight = ax1.add_patch( plt.Rectangle((-rx/2, PLOT_RADIUS - ry/2), rx, ry, fc=tsp.trafficlight, alpha=0.75 ) )
         ax1.text(0, PLOT_RADIUS + ry, r'Blockage intensity e={0}'.format(e), horizontalalignment='center')
     patches = [ ax1.add_patch( plt.Circle(p, radius=CIRCLE_RADIUS, fc='none', ec='k', ls='dotted') ) for p in positions ]
     return patches, trafficlight
@@ -74,7 +74,8 @@ def animate(i):
             p.set_facecolor('w')
             p.set_edgecolor('none')
             #p.set_linestyle('solid')
-    trafficlight.set_facecolor(colorize(tsp.trafficlight))
+    if e:
+        trafficlight.set_facecolor(colorize(tsp.trafficlight))
     tsp.update()
     return patches, trafficlight
 
